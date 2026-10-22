@@ -17,7 +17,7 @@ from PIL import Image, ImageOps
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # ---------------- SETTINGS YOU CAN EDIT ----------------
-DEFAULT_MODEL = "gemini-2.5-flash"   # change here (or set GEMINI_MODEL) if Google renames it
+DEFAULT_MODEL = "gemini-3.5-flash"   # change here (or set GEMINI_MODEL) if Google renames it
 MAX_IMAGE_SIDE = 2000                # big photos are shrunk to this many pixels (faster, cheaper)
 MAX_UPLOAD_MB = 10
 # --------------------------------------------------------
