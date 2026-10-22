@@ -4,13 +4,17 @@ Run locally:  streamlit run app.py
 """
 from __future__ import annotations
 
+import base64
 import io
 import os
 
+import requests
 import streamlit as st
-from google import genai
-from google.genai import types
 from PIL import Image, ImageOps
+
+# NOTE: this app talks to the Gemini web API directly with `requests`,
+# so it does NOT need the 'google-genai' package (avoids install/import errors).
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # ---------------- SETTINGS YOU CAN EDIT ----------------
 DEFAULT_MODEL = "gemini-2.5-flash"   # change here (or set GEMINI_MODEL) if Google renames it
@@ -80,13 +84,27 @@ def build_prompt(level: str, extra: str) -> str:
 
 
 def solve_question(api_key: str, model: str, image_bytes: bytes, mime: str, prompt: str) -> str:
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model,
-        contents=[types.Part.from_bytes(data=image_bytes, mime_type=mime), prompt],
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, temperature=0.2),
-    )
-    text = (response.text or "").strip()
+    body = {
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [
+            {"inline_data": {"mime_type": mime, "data": base64.b64encode(image_bytes).decode()}},
+            {"text": prompt},
+        ]}],
+        "generationConfig": {"temperature": 0.2},
+    }
+    resp = requests.post(API_URL.format(model=model), json=body, timeout=120,
+                         headers={"x-goog-api-key": api_key, "Content-Type": "application/json"})
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("error", {}).get("message", resp.text)
+        except ValueError:
+            detail = resp.text
+        raise RuntimeError(f"{resp.status_code} {detail}")
+    try:
+        parts = resp.json()["candidates"][0]["content"]["parts"]
+        text = "".join(p.get("text", "") for p in parts).strip()
+    except (KeyError, IndexError, TypeError, ValueError):
+        text = ""
     if not text:
         raise RuntimeError("The AI returned an empty answer (the image may have been blocked). "
                            "Try a clearer picture.")
